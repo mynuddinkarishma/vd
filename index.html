@@ -140,6 +140,10 @@
                 </p>
             </div>
 
+            <div id="hostingNotice" class="hidden relative z-10 mb-6 rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-100" role="status">
+                This GitHub Pages site hosts the interface only. Video analysis and downloads require the VidFetch backend, which is not hosted here.
+            </div>
+
             <!-- State 1: Input Form -->
             <div id="searchState" class="relative z-10 fade-in">
                 <div id="errorBox" class="hidden mb-6 bg-red-500/20 border border-red-500/50 text-red-200 px-4 py-3 rounded-xl text-sm font-medium"></div>
@@ -260,6 +264,7 @@
             const resultState = document.getElementById('resultState');
             const urlInput = document.getElementById('videoUrl');
             const errorBox = document.getElementById('errorBox');
+            const hostingNotice = document.getElementById('hostingNotice');
             
             const videoThumbnail = document.getElementById('videoThumbnail');
             const videoTitle = document.getElementById('videoTitle');
@@ -269,6 +274,13 @@
 
             let selectedFormatId = null;
             let currentUrl = '';
+
+            if (window.location.hostname.endsWith('github.io')) {
+                hostingNotice.classList.remove('hidden');
+                form.querySelectorAll('input, button').forEach((control) => {
+                    control.disabled = true;
+                });
+            }
 
             // Handle URL Analysis via Backend API
             form.addEventListener('submit', async (e) => {
@@ -289,29 +301,25 @@
                 let data;
 
                 try {
-                    const response = await fetch('http://localhost:3000/api/analyze', {
+                    const response = await fetch('/api/analyze', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ url })
                     });
 
                     if (!response.ok) {
-                        throw new Error(`Server returned status: ${response.status}`);
+                        const payload = await response.json().catch(() => ({}));
+                        throw new Error(payload.error || `Server returned status: ${response.status}`);
                     }
 
                     data = await response.json();
                 } catch (error) {
-                    console.warn("Backend not found. Falling back to Demo Mode.", error);
-                    
-                    // Fallback Demo Data for preview purposes
-                    data = {
-                        title: "Demo Video (Backend Offline)",
-                        thumbnail: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/Elephants_Dream_s5_both.jpg/640px-Elephants_Dream_s5_both.jpg",
-                        formats: [
-                            { format_id: "demo-1080p", quality: "1080p (Demo Mode)", size: "25.00 MB", ext: "mp4", hasVideo: true, hasAudio: true },
-                            { format_id: "demo-720p", quality: "720p (Demo Mode)", size: "12.50 MB", ext: "mp4", hasVideo: true, hasAudio: true }
-                        ]
-                    };
+                    console.error("Video analysis failed:", error);
+                    loadingState.classList.add('hidden');
+                    searchState.classList.remove('hidden');
+                    errorBox.textContent = error.message || 'Unable to analyze this video.';
+                    errorBox.classList.remove('hidden');
+                    return;
                 }
                     
                 try {
@@ -330,10 +338,15 @@
                             
                             const typeText = format.hasVideo && format.hasAudio ? 'Video + Audio' : (format.hasVideo ? 'Video Only' : 'Audio Only');
                             
-                            btn.innerHTML = `
-                                <span class="font-semibold text-white text-sm line-clamp-1">${format.quality}</span>
-                                <span class="text-xs text-indigo-300 mt-1">${format.size !== 'Unknown' ? format.size : ''} • ${format.ext} • ${typeText}</span>
-                            `;
+                            const quality = document.createElement('span');
+                            quality.className = 'font-semibold text-white text-sm line-clamp-1';
+                            quality.textContent = format.quality;
+
+                            const details = document.createElement('span');
+                            details.className = 'text-xs text-indigo-300 mt-1';
+                            details.textContent = `${format.size !== 'Unknown' ? format.size : ''} • ${format.ext} • ${typeText}`;
+
+                            btn.append(quality, details);
                             
                             btn.addEventListener('click', () => {
                                 document.querySelectorAll('.quality-btn').forEach(b => b.classList.remove('ring-2', 'ring-indigo-500', 'bg-white/10'));
@@ -365,19 +378,7 @@
             startDownloadBtn.addEventListener('click', () => {
                 if(!selectedFormatId || !currentUrl) return;
                 
-                if (selectedFormatId.startsWith('demo-')) {
-                    // Demo Mode Download
-                    const a = document.createElement('a');
-                    a.href = 'https://www.w3schools.com/html/mov_bbb.mp4';
-                    a.download = 'demo_video.mp4';
-                    a.target = '_blank';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                } else {
-                    // Trigger the backend download endpoint in the browser window
-                    window.location.href = `http://localhost:3000/api/download?url=${encodeURIComponent(currentUrl)}&formatId=${encodeURIComponent(selectedFormatId)}`;
-                }
+                window.location.href = `/api/download?url=${encodeURIComponent(currentUrl)}&formatId=${encodeURIComponent(selectedFormatId)}`;
             });
 
             // Handle Reset (Go Back)
