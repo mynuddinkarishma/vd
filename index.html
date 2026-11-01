@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VidFetch - High Quality Video Downloader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at top right, #1e1b4b, #0f172a, #000000);
+            background-attachment: fixed;
+        }
+
+        /* Glassmorphism utility */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Custom Input Styling */
+        input:focus, select:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5);
+        }
+
+        /* Loading Spinner Animation */
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-radius: 50%;
+            border-top-color: #6366f1;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Smooth fade transition */
+        .fade-in {
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Splash Screen Animations */
+        @keyframes splashIntro {
+            0% { opacity: 0; transform: scale(0.5); filter: blur(15px); }
+            60% { opacity: 1; transform: scale(1.1); filter: blur(0); }
+            100% { opacity: 1; transform: scale(1); filter: blur(0); }
+        }
+        
+        @keyframes splashOutro {
+            0% { opacity: 1; transform: scale(1); filter: blur(0); }
+            100% { opacity: 0; transform: scale(2.5); filter: blur(20px); }
+        }
+
+        .splash-in {
+            animation: splashIntro 1s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        
+        .splash-out {
+            animation: splashOutro 0.7s cubic-bezier(0.55, 0.085, 0.68, 0.53) forwards;
+        }
+
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body class="text-white min-h-screen flex flex-col antialiased">
+
+    <!-- Splash Screen Overlay -->
+    <div id="splashScreen" class="fixed inset-0 z-[100] flex items-center justify-center bg-[#0f172a] transition-opacity duration-700">
+        <div class="relative flex items-center justify-center">
+            <!-- Glowing background pulse -->
+            <div class="absolute w-48 h-48 bg-indigo-600/40 blur-[50px] rounded-full animate-pulse"></div>
+            <!-- Logo Text -->
+            <h1 id="splashLogo" class="relative text-8xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-tr from-indigo-400 to-purple-400 z-10 splash-in">
+                VD
+            </h1>
+        </div>
+    </div>
+
+    <!-- Navigation (Optional, for realistic look) -->
+    <nav class="w-full p-6 flex justify-between items-center z-10">
+        <a href="#" onclick="window.location.reload(); return false;" class="flex items-center gap-2 font-bold text-2xl tracking-tight hover:opacity-80 transition-opacity" title="Refresh Page">
+            <svg class="w-8 h-8 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"></path>
+            </svg>
+            VD
+        </a>
+        <div class="hidden sm:flex items-center gap-6 text-sm font-medium text-gray-400">
+            <a href="#" class="hover:text-white transition">Supported Sites</a>
+            <a href="#" class="hover:text-white transition">FAQ</a>
+            <a href="#" class="hover:text-white transition">Contact</a>
+            
+            <!-- Install App Button (Hidden by default, shown if browser supports installation) -->
+            <button id="installAppBtn" class="hidden ml-2 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/40 px-4 py-1.5 rounded-full text-sm font-semibold transition-all shadow-[0_0_10px_rgba(99,102,241,0.2)]">
+                Install App
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow flex items-center justify-center p-4 z-10">
+        <div class="w-full max-w-3xl glass-panel rounded-3xl p-8 sm:p-12 relative overflow-hidden">
+            
+            <!-- Background Glow Effect -->
+            <div class="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-32 bg-indigo-600 opacity-20 blur-[100px] rounded-full pointer-events-none"></div>
+
+            <!-- Header -->
+            <div class="text-center mb-10 relative z-10">
+                <h1 class="text-4xl sm:text-5xl font-extrabold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400">
+                    Download Any Video
+                </h1>
+                <p class="text-gray-400 text-lg">
+                    Paste the URL below to grab videos from YouTube, TikTok, Twitter, and more in stunning quality.
+                </p>
+            </div>
+
+            <!-- State 1: Input Form -->
+            <div id="searchState" class="relative z-10 fade-in">
+                <div id="errorBox" class="hidden mb-6 bg-red-500/20 border border-red-500/50 text-red-200 px-4 py-3 rounded-xl text-sm font-medium"></div>
+                <form id="downloadForm" class="flex flex-col gap-4">
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                            </svg>
+                        </div>
+                        <input 
+                            type="url" 
+                            id="videoUrl" 
+                            placeholder="Paste video link here..." 
+                            required
+                            class="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-lg text-white placeholder-gray-500 transition-all hover:bg-white/10"
+                        >
+                    </div>
+
+                    <button type="submit" class="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-2xl py-4 px-8 shadow-lg shadow-indigo-500/25 transition-all transform hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        Analyze Video
+                    </button>
+                </form>
+            </div>
+
+            <!-- State 2: Loading -->
+            <div id="loadingState" class="hidden relative z-10 flex flex-col items-center justify-center py-12 fade-in">
+                <div class="spinner mb-6"></div>
+                <h3 class="text-xl font-medium text-white mb-2">Analyzing URL...</h3>
+                <p class="text-gray-400">Fetching video details and available formats.</p>
+            </div>
+
+            <!-- State 3: Result Card -->
+            <div id="resultState" class="hidden relative z-10 fade-in">
+                <div class="bg-black/30 rounded-2xl border border-white/10 p-4 sm:p-6 flex flex-col sm:flex-row gap-6">
+                    
+                    <!-- Thumbnail Preview -->
+                    <div class="w-full sm:w-2/5 shrink-0 relative rounded-xl overflow-hidden group h-fit bg-black/50 border border-white/5">
+                        <img 
+                            id="videoThumbnail"
+                            src="https://placehold.co/600x400/2d3748/ffffff?text=Analyzing..."
+                            alt="Video Thumbnail"
+                            class="w-full h-auto object-cover aspect-video"
+                        >
+                    </div>
+
+                    <!-- Info & Actions -->
+                    <div class="w-full sm:w-3/5 flex flex-col justify-between">
+                        <div>
+                            <h3 id="videoTitle" class="text-xl font-bold text-white mb-1 line-clamp-2" title="Video Title">
+                                Video Title
+                            </h3>
+                            <p class="text-sm text-gray-400 mb-3">Please select a format to download</p>
+                        </div>
+
+                        <!-- Quality Selection -->
+                        <div id="selectionArea" class="flex flex-col gap-2">
+                            <p class="text-sm font-medium text-gray-300 mb-1">Available Formats:</p>
+                            
+                            <!-- Dynamic Format List -->
+                            <div id="downloadOptions" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                                <!-- Populated via JS -->
+                            </div>
+                            
+                            <button id="startDownloadBtn" disabled class="mt-4 w-full bg-white text-black font-semibold rounded-xl py-3 px-4 hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                </svg>
+                                Download Selected
+                            </button>
+
+                            <button id="resetBtn" class="mt-2 w-full bg-white/10 text-white font-medium rounded-xl py-3 px-4 hover:bg-white/20 transition-colors">
+                                Analyze Another Video
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="w-full p-6 text-center text-gray-500 text-sm z-10">
+        <p>&copy; 2026 VidFetch. All rights reserved. For educational purposes only.</p>
+    </footer>
+
+    <!-- JavaScript Logic -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Handle Splash Screen Animation
+            const splashScreen = document.getElementById('splashScreen');
+            const splashLogo = document.getElementById('splashLogo');
+            
+            // Hold the splash logo for 1.5 seconds, then zoom it out
+            setTimeout(() => {
+                splashLogo.classList.remove('splash-in');
+                splashLogo.classList.add('splash-out');
+                
+                // Fade out the dark background right after the logo starts zooming
+                splashScreen.style.opacity = '0';
+                splashScreen.style.pointerEvents = 'none'; // Allow clicking through immediately
+                
+                // Remove from DOM completely once transitions end
+                setTimeout(() => {
+                    if(splashScreen.parentNode) {
+                        splashScreen.remove();
+                    }
+                }, 700); 
+            }, 1500);
+
+            const form = document.getElementById('downloadForm');
+            const searchState = document.getElementById('searchState');
+            const loadingState = document.getElementById('loadingState');
+            const resultState = document.getElementById('resultState');
+            const urlInput = document.getElementById('videoUrl');
+            const errorBox = document.getElementById('errorBox');
+            
+            const videoThumbnail = document.getElementById('videoThumbnail');
+            const videoTitle = document.getElementById('videoTitle');
+            const downloadOptions = document.getElementById('downloadOptions');
+            const startDownloadBtn = document.getElementById('startDownloadBtn');
+            const resetBtn = document.getElementById('resetBtn');
+
+            let selectedFormatId = null;
+            let currentUrl = '';
+
+            // Handle URL Analysis via Backend API
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const url = urlInput.value.trim();
+                if (!url) return;
+                currentUrl = url;
+
+                // Reset UI
+                errorBox.classList.add('hidden');
+                searchState.classList.add('hidden');
+                loadingState.classList.remove('hidden');
+                downloadOptions.innerHTML = '';
+                selectedFormatId = null;
+                startDownloadBtn.disabled = true;
+
+                let data;
+
+                try {
+                    const response = await fetch('http://localhost:3000/api/analyze', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Server returned status: ${response.status}`);
+                    }
+
+                    data = await response.json();
+                } catch (error) {
+                    console.warn("Backend not found. Falling back to Demo Mode.", error);
+                    
+                    // Fallback Demo Data for preview purposes
+                    data = {
+                        title: "Demo Video (Backend Offline)",
+                        thumbnail: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/Elephants_Dream_s5_both.jpg/640px-Elephants_Dream_s5_both.jpg",
+                        formats: [
+                            { format_id: "demo-1080p", quality: "1080p (Demo Mode)", size: "25.00 MB", ext: "mp4", hasVideo: true, hasAudio: true },
+                            { format_id: "demo-720p", quality: "720p (Demo Mode)", size: "12.50 MB", ext: "mp4", hasVideo: true, hasAudio: true }
+                        ]
+                    };
+                }
+                    
+                try {
+                    // Populate Result State
+                    videoTitle.textContent = data.title || "Unknown Title";
+                    videoTitle.title = data.title || "Unknown Title";
+                    if (data.thumbnail) {
+                        videoThumbnail.src = data.thumbnail;
+                    }
+
+                    if (data.formats && data.formats.length > 0) {
+                        data.formats.forEach(format => {
+                            const btn = document.createElement('button');
+                            btn.type = 'button';
+                            btn.className = 'quality-btn text-left flex flex-col justify-center bg-white/5 border border-white/10 rounded-xl p-3 hover:bg-white/10 transition-all focus:outline-none';
+                            
+                            const typeText = format.hasVideo && format.hasAudio ? 'Video + Audio' : (format.hasVideo ? 'Video Only' : 'Audio Only');
+                            
+                            btn.innerHTML = `
+                                <span class="font-semibold text-white text-sm line-clamp-1">${format.quality}</span>
+                                <span class="text-xs text-indigo-300 mt-1">${format.size !== 'Unknown' ? format.size : ''} • ${format.ext} • ${typeText}</span>
+                            `;
+                            
+                            btn.addEventListener('click', () => {
+                                document.querySelectorAll('.quality-btn').forEach(b => b.classList.remove('ring-2', 'ring-indigo-500', 'bg-white/10'));
+                                btn.classList.add('ring-2', 'ring-indigo-500', 'bg-white/10');
+                                selectedFormatId = format.format_id;
+                                startDownloadBtn.disabled = false;
+                            });
+                            
+                            downloadOptions.appendChild(btn);
+                        });
+                    } else {
+                        downloadOptions.innerHTML = '<p class="text-sm text-red-400 p-2">No downloadable formats found.</p>';
+                    }
+
+                    // Show Results
+                    loadingState.classList.add('hidden');
+                    resultState.classList.remove('hidden');
+
+                } catch (error) {
+                    console.error("Analysis Error:", error);
+                    loadingState.classList.add('hidden');
+                    searchState.classList.remove('hidden');
+                    errorBox.textContent = "Error parsing video details.";
+                    errorBox.classList.remove('hidden');
+                }
+            });
+
+            // Handle Download Button Click
+            startDownloadBtn.addEventListener('click', () => {
+                if(!selectedFormatId || !currentUrl) return;
+                
+                if (selectedFormatId.startsWith('demo-')) {
+                    // Demo Mode Download
+                    const a = document.createElement('a');
+                    a.href = 'https://www.w3schools.com/html/mov_bbb.mp4';
+                    a.download = 'demo_video.mp4';
+                    a.target = '_blank';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                } else {
+                    // Trigger the backend download endpoint in the browser window
+                    window.location.href = `http://localhost:3000/api/download?url=${encodeURIComponent(currentUrl)}&formatId=${encodeURIComponent(selectedFormatId)}`;
+                }
+            });
+
+            // Handle Reset (Go Back)
+            resetBtn.addEventListener('click', () => {
+                urlInput.value = '';
+                resultState.classList.add('hidden');
+                searchState.classList.remove('hidden');
+                setTimeout(() => urlInput.focus(), 100);
+            });
+
+            // --- PWA (App File) Setup ---
+            // 1. Inject Web App Manifest dynamically
+            const manifest = {
+                "name": "VidFetch Video Downloader",
+                "short_name": "VidFetch",
+                "start_url": window.location.href,
+                "display": "standalone",
+                "background_color": "#0f172a",
+                "theme_color": "#4f46e5",
+                "description": "Download any video in high quality.",
+                "icons": [{
+                    "src": "https://placehold.co/192x192/4f46e5/ffffff?text=VD",
+                    "sizes": "192x192",
+                    "type": "image/png"
+                }, {
+                    "src": "https://placehold.co/512x512/4f46e5/ffffff?text=VD",
+                    "sizes": "512x512",
+                    "type": "image/png"
+                }]
+            };
+            const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+            const manifestUrl = URL.createObjectURL(manifestBlob);
+            const link = document.createElement('link');
+            link.rel = 'manifest';
+            link.href = manifestUrl;
+            document.head.appendChild(link);
+
+            // 2. Register a dummy Service Worker to satisfy PWA install requirements
+            const swCode = `
+                self.addEventListener('install', (e) => self.skipWaiting());
+                self.addEventListener('fetch', (e) => {}); // Pass-through fetch
+            `;
+            const swBlob = new Blob([swCode], {type: 'application/javascript'});
+            const swUrl = URL.createObjectURL(swBlob);
+            
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register(swUrl)
+                    .catch(err => console.log('SW registration failed:', err));
+            }
+
+            // 3. Handle the "Install App" prompt
+            let deferredPrompt;
+            const installAppBtn = document.getElementById('installAppBtn');
+            
+            window.addEventListener('beforeinstallprompt', (e) => {
+                // Prevent the mini-infobar from appearing on mobile
+                e.preventDefault();
+                // Stash the event so it can be triggered later.
+                deferredPrompt = e;
+                // Update UI to notify the user they can install the PWA
+                installAppBtn.classList.remove('hidden');
+            });
+
+            installAppBtn.addEventListener('click', async () => {
+                if (deferredPrompt) {
+                    // Show the install prompt
+                    deferredPrompt.prompt();
+                    // Wait for the user to respond to the prompt
+                    const { outcome } = await deferredPrompt.userChoice;
+                    if (outcome === 'accepted') {
+                        console.log('User accepted the install prompt');
+                        installAppBtn.classList.add('hidden'); // Hide button after install
+                    }
+                    deferredPrompt = null;
+                }
+            });
+            // --- End PWA Setup ---
+
+        });
+    </script>
+</body>
+</html>
